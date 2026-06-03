@@ -72,6 +72,7 @@ module "fortianalyzer" {
   faz_version                       = var.faz_version
   faz_license_type                  = var.faz_license_type
   admin_cidr                        = var.admin_cidr
+  fortigate_cidr                    = var.fortigate_cidr
   faz1_byol_license_file            = var.faz1_byol_license_file
   faz1_byol_fortiflex_license_token = var.faz1_byol_fortiflex_license_token
   faz2_byol_license_file            = var.faz2_byol_license_file
@@ -82,4 +83,5 @@ module "fortianalyzer" {
   ha_password                       = var.ha_password
   ha_group_id                       = var.ha_group_id
   ha_group_name                     = var.ha_group_name
+  create_iam_role                   = var.create_iam_role
 }
