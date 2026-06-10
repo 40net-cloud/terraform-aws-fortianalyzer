@@ -20,6 +20,7 @@ locals {
     ha_password           = var.ha_password
     ha_group_id           = var.ha_group_id
     ha_group_name         = var.ha_group_name
+    initial_sync          = "enable"
   }
 
   faz2_name = "${var.prefix}-faz2"
@@ -35,6 +36,7 @@ locals {
     ha_password           = var.ha_password
     ha_group_id           = var.ha_group_id
     ha_group_name         = var.ha_group_name
+    initial_sync          = "disable"
   }
 
   # AMI ID selection based on license type
@@ -91,7 +93,14 @@ locals {
       protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
       description = "FAZ HA"
-    }
+    },
+    {
+    description = "All traffic from VPC"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
+  }
   ]
 
   faz1_tags = merge(var.fortinet_tags, {
@@ -162,6 +171,16 @@ resource "aws_eip" "faz2" {
 
   tags = merge(var.fortinet_tags, {
     Name = "${var.prefix}-faz2-eip"
+  })
+}
+
+resource "aws_eip" "vip" {
+  count = var.ha_ip == "public" ? 1 : 0
+
+  domain            = "vpc"
+
+  tags = merge(var.fortinet_tags, {
+    Name = "${var.prefix}-eip"
   })
 }
 
