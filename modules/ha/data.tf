@@ -62,3 +62,8 @@ data "aws_ami" "fortianalyzer_payg" {
     values = ["available"]
   }
 }
+
+# Get VPC information
+data "aws_vpc" "selected" {
+   id    = var.vpc_id
+}
