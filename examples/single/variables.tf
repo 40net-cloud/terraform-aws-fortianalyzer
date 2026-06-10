@@ -49,6 +49,12 @@ variable "availability_zone" {
 }
 
 # FortiAnalyzer configuration
+variable "faz_vmsize" {
+  description = "EC2 instance type for FortiAnalyzer"
+  type        = string
+  default     = "m5.large"
+}
+
 variable "faz_license_type" {
   description = "License type (byol or payg)"
   type        = string

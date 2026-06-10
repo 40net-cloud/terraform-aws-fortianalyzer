@@ -135,7 +135,7 @@ variable "faz_root_volume_size" {
 variable "faz_log_volume_size" {
   description = "Size of the log volume in GB"
   type        = number
-  default     = 100
+  default     = 500
 }
 
 variable "faz_log_volume_type" {
