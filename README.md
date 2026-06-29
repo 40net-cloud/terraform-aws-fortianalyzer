@@ -1,204 +1,118 @@
-# AWS FortiAnalyzer Terraform Module
+# FortiAnalyzer Terraform modules for AWS
 
-This repository contains Terraform modules for deploying Fortinet FortiAnalyzer on AWS. The modules provide a comprehensive solution for centralized security logging and reporting in AWS environments.
+:wave: - [Introduction](#introduction) - [Architecture & Design](#architecture--design) - [Deployment](#deployment) - [Support](#support) - :wave:
 
-## Features
+## Introduction
 
-- **Automated AMI Discovery**: Automatically finds the latest FortiAnalyzer AMI based on license type (BYOL/PAYG) and version
-- **Flexible Licensing**: Support for both BYOL (Bring Your Own License) and PAYG (Pay As You Go) deployments
-- **Security**: Pre-configured security groups with appropriate rules for management and log collection
-- **Storage**: Configurable root and log storage volumes with encryption
-- **Networking**: Support for existing VPC/subnet infrastructure or automatic configuration
-- **IAM Integration**: Optional IAM roles for AWS service integration
-- **Monitoring**: CloudWatch integration and detailed monitoring options
+This repository provides Terraform modules for deploying Fortinet FortiAnalyzer on AWS. FortiAnalyzer delivers centralized security logging, analytics, and reporting — collecting and correlating logs from Fortinet devices for visibility, incident analysis, and compliance.
 
-## Module Structure
+Two deployment patterns are available, each with a reusable module and a ready-to-run example:
 
-```
+- **Single** — one standalone FortiAnalyzer instance.
+- **HA** — a clustered deployment supporting active-active (`a-a`) and active-passive (`a-p`) modes.
+
+Both patterns support **BYOL** and **PAYG** licensing, and automatically discover the latest matching Marketplace AMI for the chosen license type and version.
+
+## Architecture & Design
+
+| Pattern | Use when | Failover | Detailed docs |
+|---------|----------|----------|---------------|
+| **Single** | Labs, PoCs, and non-critical or cost-sensitive deployments | None | [`examples/single/README.md`](examples/single/README.md) |
+| **HA** | Production deployments that need resilience or scale-out log ingestion | Active-active or active-passive | [`examples/ha/README.md`](examples/ha/README.md) |
+
+The **single** module provisions one EC2 instance on a management ENI, with an optional Elastic IP and an optional encrypted log volume.
+
+The **HA** module deploys a cluster in one of two modes:
+
+- **Active-passive (`a-p`)** — one active node and a standby, with VRRP-based automatic failover. The floating VIP can be **public** (nodes in separate subnets/AZs, VIP moves to the active node on failover) or **private** — set via `ha_ip = "public" | "private"`.
+- **Active-active (`a-a`)** — both nodes process workload concurrently for higher log-ingestion capacity.
+
+The HA README documents each mode, the resulting CLI HA configuration, and failover behavior in detail.
+
+## Repository Structure
+
+```text
 terraform-aws-fortianalyzer/
 ├── modules/
-│   ├── single/              # Single FortiAnalyzer deployment
-│   └── ha/                  # High Availability FortiAnalyzer deployment
+│   ├── single/                  # Single FortiAnalyzer deployment module
+│   └── ha/                      # HA deployment module (a-a / a-p)
 ├── examples/
-│   ├── single/              # Single instance deployment example
-│   └── ha/                  # HA deployment example
+│   ├── single/                  # Single example
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── terraform.tfvars.example
+│   │   └── README.md
+│   └── ha/                      # HA example
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       └── terraform.tfvars.example
+│       └── README.md
 └── README.md
 ```
 
-## Quick Start
+## Deployment
 
 ### Prerequisites
 
 - AWS CLI configured with appropriate permissions
-- Terraform >= 1.0
+- Terraform >= 1.0 and AWS provider >= 5.0
+- An existing VPC and subnet(s)
 - AWS key pair for SSH access
-- For BYOL: Valid FortiAnalyzer license file
+- For BYOL: a valid FortiAnalyzer license file or FortiFlex token
+- [FortiAnalyzer AWS Administration Guide — supported instances and models](https://docs.fortinet.com/document/fortianalyzer-public-cloud/7.6.0/aws-administration-guide/)
+- [FortiAnalyzer requires a minimum disk size of 500 GB](docs.fortinet.com/document/fortianalyzer-public-cloud/8.0.0/aws-administration-guide/571011/deploying-fortianalyzer-vm-using-manual-launch)
 
-### Basic PAYG Deployment
+### Quick start
 
-```hcl
-module "fortianalyzer" {
-  source = "./modules/single"
+Each example is self-contained. Pick the one you need (`single` or `ha`) and run:
 
-  # Basic configuration
-  name             = "my-fortianalyzer"
-  faz_license_type = "payg"
-  faz_version      = "7.6"
+```bash
+cd examples/single        # or: cd examples/ha
 
-  # Instance configuration
-  faz_vmsize = "m5.large"
-  key_name   = "my-key-pair"
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars and set the required values
 
-  # Network configuration
-  vpc_id    = "vpc-12345678"
-  subnet_id = "subnet-12345678"
-
-  # Security
-  admin_cidr = ["203.0.113.0/24"]
-}
+terraform init
+terraform plan
+terraform apply
 ```
 
-### Basic BYOL Deployment
+Tear everything down with:
 
-```hcl
-module "fortianalyzer" {
-  source = "./modules/single"
-
-  # Basic configuration
-  name             = "my-fortianalyzer"
-  faz_license_type = "byol"
-  faz_version      = "7.6"
-  faz_byol_fortiflex_license_token = "your-fortiflex-token"
-
-  # Instance configuration
-  faz_vmsize = "m5.large"
-  key_name   = "my-key-pair"
-
-  # Network configuration
-  vpc_id    = "vpc-12345678"
-  subnet_id = "subnet-12345678"
-
-  # Security
-  admin_cidr = ["203.0.113.0/24"]
-}
+```bash
+terraform destroy
 ```
 
-### HA Deployment
+See the example READMEs for the full variable reference, architecture diagrams, outputs, and troubleshooting.
 
-```hcl
-module "fortianalyzer" {
-  source = "./modules/ha"
+### Licensing
 
-  prefix           = "my-faz"
-  faz_license_type = "byol"
-  faz_version      = "7.6"
-  ha_ip            = "public"
-  ha_password      = "your-ha-password"
-  ha_group_id      = 1
-  ha_group_name    = "FAZHA"
+| Type | How to provide the license |
+|------|----------------------------|
+| **PAYG** | No license input required — set `faz_license_type = "payg"`. |
+| **BYOL (file)** | Set `faz_license_type = "byol"` and supply the `.lic` file via the relevant `*_byol_license_file` variable. |
+| **BYOL (FortiFlex)** | Set `faz_license_type = "byol"` and supply the token via the relevant `*_byol_fortiflex_license_token` variable. |
 
-  faz1_byol_fortiflex_license_token = "your-fortiflex-token-1"
-  faz2_byol_fortiflex_license_token = "your-fortiflex-token-2"
-  faz1_byol_serial_number           = "your-serial-1"
-  faz2_byol_serial_number           = "your-serial-2"
+### Supported versions
 
-  vpc_id                    = "vpc-12345678"
-  subnet_ids                = ["subnet-11111111", "subnet-22222222"]
-  subnet_availability_zones = ["eu-north-1a", "eu-north-1b"]
-}
-```
+FortiAnalyzer 7.0 and above. `faz_version` accepts:
 
-## Examples
-
-Detailed examples are available in the `examples/` directory:
-
-- **[single](examples/single/)**: Single FortiAnalyzer deployment
-- **[ha](examples/ha/)**: High Availability FortiAnalyzer deployment
-
-## Supported FortiAnalyzer Versions
-
-The module supports FortiAnalyzer versions 7.0 and above. You can specify versions using:
-
-- Exact version: `"7.4.5"`
-- Major.minor: `"7.4"` (latest patch version)
-- Major only: `"7"` (latest version in major release)
-
-## AMI Search Logic
-
-The module automatically searches for the appropriate AMI based on:
-
-- **BYOL**: `FortiAnalyzer-VM64-AWS*{version}*`
-- **PAYG**: `FortiAnalyzer-VM64-AWSONDEMAND*{version}*`
-
-## Security Considerations
-
-### Default Security Group Rules
-
-The module creates security groups with the following rules:
-
-**Management Access:**
-- SSH (22/tcp) - from admin_cidr
-- HTTPS (443/tcp) - from admin_cidr
-
-**Log Collection:**
-- Secure log transmission (541/tcp) - from fortigate_cidr
-- Syslog (514/udp) - from fortigate_cidr
-
-**HA (HA module only):**
-- HA heartbeat (5199/tcp) - all
-
-### Recommendations
-
-1. **Restrict Management Access**: Always specify specific CIDR blocks for `admin_cidr`
-2. **Use Private Subnets**: Deploy in private subnets when possible
-3. **Enable Encryption**: Root and log volumes are encrypted by default
-4. **Regular Updates**: Keep FortiAnalyzer version updated
-
-## Storage Configuration
-
-### Root Volume
-- Default: 100 GB GP2
-- Encrypted by default
-- Configurable size
-
-### Log Volume
-- Default: 100 GB GP3 (optional)
-- Encrypted by default
-- Mounted as `/dev/sdf`
-- Configurable size and type
-
-## IAM Permissions
-
-The module can create an IAM role with permissions for:
-- EC2 instance metadata access
-- CloudWatch logs integration
-- Basic AWS service discovery
-
-## Outputs
-
-The module provides comprehensive outputs including:
-- Instance information (ID, IPs)
-- Network details (security groups, interfaces)
-- Management URLs and SSH connection strings
-- Storage and IAM resource information
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test with both BYOL and PAYG examples
-5. Submit a pull request
+- Exact version — `"7.6.6"`
+- Major.minor — `"7.6"` (latest patch)
+- `"latest"` — newest available
 
 ## Support
 
-For issues and questions:
-1. Check the [examples](examples/) for common use cases
-2. Review Fortinet documentation for FortiAnalyzer
-3. Open an issue in this repository
+Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services. For issues, please use the [Issues](https://github.com/40net-cloud/terraform-aws-fortianalyzer/issues) tab of this project.
 
 ## References
 
 - [FortiAnalyzer AWS Administration Guide](https://docs.fortinet.com/document/fortianalyzer-public-cloud/7.6.0/aws-administration-guide/)
-- [AWS Marketplace - FortiAnalyzer](https://aws.amazon.com/marketplace/seller-profile?id=7de3dd38-52b2-4c1a-9fc1-93e7dfca9d6b)
-- [Terraform AWS Provider Documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [AWS Marketplace — FortiAnalyzer](https://aws.amazon.com/marketplace/pp/prodview-6dt7z5twj7t7a?sr=0-3&ref_=ucaf&applicationId=AWSMPContessa)
+- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+
+## License
+
+[License](https://github.com/40net-cloud/terraform-aws-fortianalyzer/blob/main/LICENSE) © Fortinet Technologies. All rights reserved.
